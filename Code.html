@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Urlaubs-Packlisten</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      max-width: 600px;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    #controls,
+    #itemControls {
+      margin-bottom: 15px;
+    }
+    #destinationName,
+    #itemName {
+      padding: 8px;
+      width: 60%;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 8px 12px;
+      margin-left: 8px;
+      cursor: pointer;
+    }
+    ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+    li {
+      margin: 8px 0;
+    }
+    select {
+      padding: 8px;
+      margin-right: 8px;
+    }
+    /* Grafik und Text beim Erfolg */
+    #successMessage {
+      display: none; /* Wird per JavaScript ein-/ausgeschaltet */
+      margin-top: 20px;
+      text-align: center;
+    }
+    #successMessage img {
+      max-width: 150px; 
+      display: block;
+      margin: 0 auto 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Urlaubs-Packlisten verwalten</h1>
+  <p>
+    Hier kannst du mehrere Packlisten für verschiedene Destinationen anlegen und verwalten. 
+    Jede Liste wird automatisch im Local Storage gespeichert.
+  </p>
+
+  <!-- Bereich zum Anlegen und Wechseln von Destinationen -->
+  <div id="controls">
+    <input 
+      type="text" 
+      id="destinationName" 
+      placeholder="Neue Destination (z.B. 'Bali', 'Paris')" 
+    />
+    <button type="button" onclick="addDestination()">Destination hinzufügen</button>
+    <br><br>
+    <label for="destinationSelect">Aktuelle Destination:</label>
+    <select id="destinationSelect" onchange="selectDestination()">
+      <!-- Dynamisch gefüllt -->
+    </select>
+  </div>
+
+  <!-- Bereich zum Hinzufügen neuer Gegenstände in die aktuelle Liste -->
+  <div id="itemControls">
+    <input 
+      type="text" 
+      id="itemName" 
+      placeholder="Gegenstand eingeben (z.B. 'Handtuch')" 
+    />
+    <button type="button" onclick="addItem()">Hinzufügen</button>
+    <button type="button" onclick="clearAll()">Liste löschen</button>
+  </div>
+
+  <!-- Packliste (dynamisch) -->
+  <ul id="itemList"></ul>
+
+  <!-- Erfolgsmeldung, wenn alles abgehakt ist -->
+  <div id="successMessage">
+    <!-- Du kannst hier auch ein eigenes Bild einfügen oder einen anderen Link verwenden -->
+    <img 
+      src="https://via.placeholder.com/150/FF9900/FFFFFF?text=Urlaub" 
+      alt="Bereit für den Urlaub"
+    />
+    <p><strong>Du hast es geschafft und bist bereit für den Urlaub!</strong></p>
+  </div>
+
+  <script>
+    // Globale Variable: speichert alle Listen in einem Objekt
+    // Struktur:
+    // {
+    //   "Bali": [ { text: "Handtuch", checked: false }, ... ],
+    //   "Spanien": [ { text: "Sonnencreme", checked: true }, ... ],
+    //   ...
+    // }
+    let packLists = {};
+    let currentDestination = "";
+
+    // Diese Funktion wird beim Laden der Seite aufgerufen:
+    // 1) aus dem Local Storage lesen
+    // 2) Dropdown auffüllen
+    // 3) Falls möglich, direkt eine Destination auswählen
+    window.onload = function() {
+      loadFromLocalStorage();
+      populateDestinationSelect();
+      // Falls es mindestens eine Destination gibt, wähle die erste aus
+      const destinationSelect = document.getElementById("destinationSelect");
+      if (destinationSelect.options.length > 0) {
+        destinationSelect.selectedIndex = 0;
+        selectDestination();
+      }
+    };
+
+    // Liest das Objekt mit allen Packlisten aus dem Local Storage
+    function loadFromLocalStorage() {
+      const data = localStorage.getItem("packLists");
+      if (data) {
+        packLists = JSON.parse(data);
+      }
+    }
+
+    // Schreibt das Objekt mit allen Packlisten in den Local Storage
+    function saveToLocalStorage() {
+      localStorage.setItem("packLists", JSON.stringify(packLists));
+    }
+
+    // Füllt das Dropdown-Menü mit allen verfügbaren Destinationen
+    function populateDestinationSelect() {
+      const destinationSelect = document.getElementById("destinationSelect");
+      // Vorher leeren
+      destinationSelect.innerHTML = "";
+
+      // Für jede Destination im Objekt packLists eine <option> erstellen
+      for (const destination in packLists) {
+        const option = document.createElement("option");
+        option.value = destination;
+        option.textContent = destination;
+        destinationSelect.appendChild(option);
+      }
+    }
+
+    // Legt eine neue Destination an (falls noch nicht vorhanden)
+    function addDestination() {
+      const destinationInput = document.getElementById("destinationName");
+      const newDestinationName = destinationInput.value.trim();
+
+      if (newDestinationName !== "") {
+        // Prüfen, ob Destination bereits existiert
+        if (!packLists[newDestinationName]) {
+          packLists[newDestinationName] = [];
+          saveToLocalStorage();
+          populateDestinationSelect();
+
+          // Automatisch die neu angelegte Destination auswählen
+          const destinationSelect = document.getElementById("destinationSelect");
+          destinationSelect.value = newDestinationName;
+          selectDestination();
+        }
+        // Eingabefeld leeren
+        destinationInput.value = "";
+      }
+    }
+
+    // Wird aufgerufen, wenn im Dropdown eine Destination ausgewählt wird
+    function selectDestination() {
+      const destinationSelect = document.getElementById("destinationSelect");
+      currentDestination = destinationSelect.value;
+      loadListForCurrentDestination();
+    }
+
+    // Lädt die Liste für die aktuell ausgewählte Destination in den <ul>-Bereich
+    function loadListForCurrentDestination() {
+      const itemList = document.getElementById("itemList");
+      itemList.innerHTML = "";
+
+      // Falls es zur Destination noch keine Liste gibt, beenden
+      if (!packLists[currentDestination]) {
+        checkAllDone();
+        return;
+      }
+
+      // Die Einträge (text + checked) laden
+      packLists[currentDestination].forEach((item, index) => {
+        const listItem = document.createElement("li");
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = item.checked;
+        checkbox.addEventListener("change", () => {
+          item.checked = checkbox.checked;
+          saveToLocalStorage();
+          checkAllDone(); // Prüfen, ob jetzt alles abgehakt ist
+        });
+
+        const textNode = document.createTextNode(" " + item.text);
+
+        listItem.appendChild(checkbox);
+        listItem.appendChild(textNode);
+        itemList.appendChild(listItem);
+      });
+
+      // Am Ende prüfen wir, ob alle Elemente abgehakt sind
+      checkAllDone();
+    }
+
+    // Fügt der aktuellen Destination einen neuen Gegenstand hinzu
+    function addItem() {
+      if (!currentDestination) return;
+
+      const itemName = document.getElementById("itemName");
+      const trimmedValue = itemName.value.trim();
+
+      if (trimmedValue !== "") {
+        // Neues Objekt in der Liste der aktuellen Destination
+        packLists[currentDestination].push({
+          text: trimmedValue,
+          checked: false
+        });
+
+        // Speichern und Liste aktualisieren
+        saveToLocalStorage();
+        loadListForCurrentDestination();
+
+        // Eingabefeld leeren
+        itemName.value = "";
+      }
+    }
+
+    // Löscht die gesamte Liste für die aktuell ausgewählte Destination
+    function clearAll() {
+      if (!currentDestination) return;
+
+      packLists[currentDestination] = [];
+      saveToLocalStorage();
+      loadListForCurrentDestination();
+    }
+
+    // Prüft, ob alle Gegenstände in der aktuellen Liste abgehakt sind
+    // Wenn ja, blenden wir die Grafik und den Text ein
+    // Sonst wird sie ausgeblendet
+    function checkAllDone() {
+      const successMessage = document.getElementById("successMessage");
+
+      // Falls keine Destination gewählt ist oder Destination keine Liste hat
+      if (
+        !currentDestination ||
+        !packLists[currentDestination] ||
+        packLists[currentDestination].length === 0
+      ) {
+        successMessage.style.display = "none";
+        return;
+      }
+
+      // Prüfe, ob alle Items in der aktuellen Destination abgehakt sind
+      const allChecked = packLists[currentDestination].every(
+        (item) => item.checked
+      );
+
+      if (allChecked) {
+        successMessage.style.display = "block";  // Grafik anzeigen
+      } else {
+        successMessage.style.display = "none";   // Grafik ausblenden
+      }
+    }
+  </script>
+</body>
+</html>
